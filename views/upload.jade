@@ -1,0 +1,8 @@
+doctype html
+html
+  head
+    title Task Upload
+  body
+    form(action='/upload', method='post', enctype='multipart/form-data')
+      input(name='task', type='file')
+      input(type='submit')
