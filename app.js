@@ -20,7 +20,7 @@ app.use(cookieParser());
 app.use(require('stylus').middleware(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.set('port', process.env.PORT || 6969);
+app.set('port', process.env.PORT || 8081);
 var server = app.listen(app.get('port'));
 var io     = require('socket.io').listen(server);
 //var io = require('socket.io').listen(app.listen(8080));
@@ -34,10 +34,10 @@ app.get('/', function (req, res) {
 var mysql = require('mysql');
 
 var configdb = {
-    host: 'localhost',
-    user: 'root',
+    host: 'aa5bilh1o0uc00.c5cfpvazprxp.us-west-2.rds.amazonaws.com',
+    user: 'ebroot',
     password: 'Guomao12#',
-    database: 'marazeem',
+    database: 'ebdb',
     insecureAuth: true,
     multipleStatements: true,
 };
