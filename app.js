@@ -20,7 +20,7 @@ app.use(cookieParser());
 app.use(require('stylus').middleware(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.set('port', process.env.PORT || 3000);
+app.set('port', 8081);
 var server = app.listen(app.get('port'));
 var io     = require('socket.io').listen(server);
 //var io = require('socket.io').listen(app.listen(8080));
