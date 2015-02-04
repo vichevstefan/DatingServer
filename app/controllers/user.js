@@ -2,6 +2,14 @@ var validator = require('validator');
 var md5 = require('MD5');
 var path = require('path');
 var geocoder = require('geocoder');
+var nodemailer = require('nodemailer');
+var transporter = nodemailer.createTransport({
+	service: 'gmail',
+	auth:{
+		user:'',
+		pass:''
+	}
+});
 
 module.exports.controller = function(app,db) {
 
@@ -22,6 +30,86 @@ module.exports.controller = function(app,db) {
 				gender = req.body.gender,
 				purpose = req.body.purpose,
 				fullname = req.body.fullname;
+	  var sex = 0;
+			if(gender == 'male'){
+				sex = 0;
+			}else if(gender == 'female'){
+				sex = 1;
+			}
+			var username = email;
+    		 if (email === "" || username === "" || password === "" || confirm === ""){
+    			  res.json({'message':'Please enter information into the corresponding box','code':601});
+    		  }
+    		  else if (validator.isEmail(email) === false) {
+    			  res.json({'message':'Email incorrect formats. Please try again!','code':602});
+    		  }
+    		  else if (username.length < 2  || username.length > 120) {
+    		  	res.json({'message':'Username consists 2 to 20 characters!','code':603});
+    		  }
+    		  else if (password.length < 6) {
+    		  	res.json({'message':'Password should consists 6 characters!','code':604});
+    		  }
+/*    		  else if (password != confirm){
+    			  res.json({'message':'Password and confirm password mismatch.','code':605});
+    		  }*/
+    		  else {
+	    		  var rsl = db.query('select * from tbUser where username = ?', username, function(err, result) {
+			    	  if (result.length != 0){
+			    		  res.json({'message':'This username is already registered.','code':606});
+			    	  }
+			    	  else {
+				    	  var rsl2 = db.query('select * from tbUser where email = ?', email, function(err, result2) {
+				    	  	if (result2.length != 0){
+					    	 	 res.json({'message':'This email is already registered.','code':607});
+			    	 			}
+					    	  else {
+					    	  	if (err){
+						    		 	res.json({'message':'Error','code':608});
+							    	}
+						    	  else {
+							    	  var empty = '';
+							    	  if (device_token != ''){	
+						    	  		db.query('select * from tbUser where device_token = ?',device_token,function(err4,rsl4){
+											if (err4 != '')
+											{
+												console.log('rs',err4);
+											}else if (rsl4 != ''){
+						    	  			  db.query('update tbUser set device_token = ? where id = ? ',[empty,rsl4[0].id]);
+						    	  			}
+						    	  		});
+					    	  		}
+						    	  	db.query('insert into tbUser (username, email, password, token, device_token, fullname, latitude, longitude, phone, birthday, country, sex, purpose, status ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [username, email, md5(password), token, device_token, fullname, latitude, longitude, phone, birthday, country, sex, purpose, 1], function(err,result3){
+							    	  		//order activitys
+											if(err){
+												console.log('err',err);
+											}else{
+												res.json({'message':'Insert Success','code':1,'token':token,'username':username,'userid':result3.insertId,'gender':gender,'fullname':fullname,'phone':phone,'birthday':birthday,'purpose':purpose});
+											}
+										});
+					    			}
+				    			}
+				    	  });
+			    	  }
+		    	  });
+	    	  }
+	 });
+	 
+	 app.post('/registerFBUser', function (req, res) {
+      var token = randomString(32, '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
+      var email = req.body.email,
+				  phone = req.body.phone,
+				  password = req.body.password,
+				  deviceid = req.body.deviceid,
+				  confirm = req.body.confirm,
+				  device_token = req.body.devicetoken,
+				birthday = req.body.birthday,
+				latitude = req.body.latitude,
+				longitude = req.body.longitude,
+				country = req.body.country,
+				gender = req.body.gender,
+				purpose = req.body.purpose,
+				fullname = req.body.fullname,
+				fb_id = req.body.fb_id;
 	  var sex = 0;
 			if(gender == 'male'){
 				sex = 0;
@@ -85,6 +173,7 @@ module.exports.controller = function(app,db) {
 		    	  });
 	    	  }
 	 });
+	 
 //  login
 app.post('/loginUser', function(req, res) {
 
@@ -100,6 +189,8 @@ app.post('/loginUser', function(req, res) {
 	    var device_token = req.body.devicetoken;
 	  	var sql = 'select U.*, I.*,S.*, count(C.id) as likes,U.status as userstatus,U.id as userid, C.toUser from tbUser as U left join tbimage as I on U.id = I.belong left join tbcontact as C on C.toUser = U.id left join tbSearch as S on U.id = S.userid where U.username = ? and I.status = 0 group by U.id';
 		  var rsl = db.query(sql, username, function(err, result){
+			  console.log(err);
+			  console.log(result);
 		  	if (result.length != 0){
 		  		if (md5(password) != result[0].password){
 						res.json({'message':'Password is incorrect. Please try again','code' : 610});
@@ -210,6 +301,7 @@ app.post('/nearByUsers', function(req,res){
 		var userid = req.body.userid; // user login token
 		var longitude = req.body.longitude;
 		var latitude = req.body.latitude;
+		var pageIndex = req.body.pageindex;
 		var sqlCriteria = 'SELECT * FROM tbSearch WHERE userid = ?';
 		var distanceFrom = 0;
 		var distanceTo = 100;
@@ -220,18 +312,32 @@ app.post('/nearByUsers', function(req,res){
 		var showOption = 0;
 		var purposeOption = 0;
 		db.query(sqlCriteria, userid, function(errCriteria, resultCriteria){
-			distanceFrom = resultCriteria.distanceFrom;
-			distanceTo = resultCriteria.distanceTo;
-			isOversea = resultCriteria.isOversea;
-			country = resultCriteria.country;
-			ageFrom = resultCriteria.ageFrom;
-			ageTo = resultCriteria.ageTo;
-			showOption = resultCriteria.showOption;
-			purposeOption = resultCriteria.purposeOption;
-		});
-		var preSqlNearBy = 'SELECT *,r1.id as userid,DATEDIFF(NOW(),r1.birthday) / 365.25 as age,(((acos(sin(('+latitude+'*pi()/180)) * sin((r1.latitude*pi()/180))+cos(('+latitude+'*pi()/180)) * cos((r1.latitude*pi()/180)) * cos((('+longitude+'- r1.longitude)* pi()/180))))*180/pi())*60*1.1515) as distance FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id JOIN (SELECT (RAND() *(SELECT count(id) FROM tbuser)) AS id) AS r2 ';
+			console.log(errCriteria);
+			console.log(resultCriteria);
+			if(resultCriteria != null && typeof resultCriteria[0] !== 'undefined'){
+				distanceFrom = resultCriteria[0].distanceFrom;
+				distanceTo = resultCriteria[0].distanceTo;
+				isOversea = resultCriteria[0].isOversea;
+				country = resultCriteria[0].country;
+				ageFrom = resultCriteria[0].ageFrom;
+				ageTo = resultCriteria[0].ageTo;
+				showOption = resultCriteria[0].showOption;
+				purposeOption = resultCriteria[0].purposeOption;
+			}
+		
+		/*var preSqlNearBy = 'SELECT *,r1.id as userid,DATEDIFF(NOW(),r1.birthday) / 365.25 as age,(((acos(sin(('+latitude+'*pi()/180)) * sin((r1.latitude*pi()/180))+cos(('+latitude+'*pi()/180)) * cos((r1.latitude*pi()/180)) * cos((('+longitude+'- r1.longitude)* pi()/180))))*180/pi())*60*1.1515) as distance FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id JOIN (SELECT (RAND() *(SELECT count(id) FROM tbuser)) AS id) AS r2 ';
+		//var preSqlNearBy = 'SELECT * FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id JOIN (SELECT (RAND() *(SELECT count(id) FROM tbuser)) AS id) AS r2 ';
 		var endSqlNearBy = 'ORDER BY r1.id ASC LIMIT 10';
-		preSqlNearBy = preSqlNearBy + 'WHERE r1.id >= r2.id AND r1.id != ? ';
+		preSqlNearBy = preSqlNearBy + 'WHERE r1.id >= r2.id AND r1.id != ? ';*/
+		var startIndex = pageIndex*10;
+		startIndex = startIndex || 0;
+		var preSqlNearBy = 'SELECT *,r1.id as userid,(DATEDIFF(NOW(), r1.birthday) / 365.25) as age,(((acos(sin(('+latitude+'*pi()/180)) * sin((r1.latitude*pi()/180))+cos(('+latitude+'*pi()/180)) * cos((r1.latitude*pi()/180)) * cos((('+longitude+'- r1.longitude)* pi()/180))))*180/pi())*60*1.1515) as distance FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id ';
+		//var preSqlNearBy = 'SELECT * FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id JOIN (SELECT (RAND() *(SELECT count(id) FROM tbuser)) AS id) AS r2 ';
+		var endSqlNearBy = 'ORDER BY r1.id ASC LIMIT '+startIndex+',10';//RAND() LIMIT 10'; 
+		//preSqlNearBy = preSqlNearBy + 'WHERE r1.id >= r2.id AND r1.id != ? ';
+		var friendsSql = "(SELECT FRIENDS.id FROM ((SELECT D.toUser as id FROM tbcontact as D WHERE D.fromUser = ?) UNION (SELECT E.fromUser as id FROM tbcontact as E WHERE E.toUser = ?)) as FRIENDS) ";
+
+		preSqlNearBy = preSqlNearBy + 'WHERE r1.id != ? AND r1.id NOT IN ' + friendsSql;
 		
 		//Add Age Where Clause
 		if(showOption == 1){
@@ -240,7 +346,10 @@ app.post('/nearByUsers', function(req,res){
 			preSqlNearBy = preSqlNearBy + 'AND r1.sex = 1 ';
 		}
 		if(isOversea == 1){
-			preSqlNearBy = preSqlNearBy + 'r1.country = ' + country + ' ';
+			if (country != 'all')
+			{
+				preSqlNearBy = preSqlNearBy + 'AND r1.country = \'' + country + '\' ';
+			}
 			preSqlNearBy = preSqlNearBy + 'HAVING age >= ' + ageFrom + ' AND age <= ' + ageTo + ' ';
 		}else{
 
@@ -250,8 +359,9 @@ app.post('/nearByUsers', function(req,res){
 		
 		var sqlNearBy = preSqlNearBy + endSqlNearBy;
 //		var sqlNearBy = 'SELECT *,r1.id as userid FROM tbUser AS r1 INNER JOIN tbImage b ON b.belong = r1.id INNER JOIN tbSearch c ON c.userid = r1.id JOIN (SELECT (RAND() *(SELECT count(id) FROM tbuser)) AS id) AS r2 WHERE r1.id >= r2.id AND r1.id != ? ORDER BY r1.id ASC LIMIT 10';
-		db.query(sqlNearBy,userid,function(err,result){
+		db.query(sqlNearBy,[userid, userid, userid],function(err,result){
 			console.log(err);
+			console.log(sqlNearBy);
 			var data = [];
 			for (i = 0; i < result.length; i++){
 				obj = new Object();
@@ -284,8 +394,7 @@ app.post('/nearByUsers', function(req,res){
 
 				var d = R * c;
 				obj.distance = d;
-
-				if(result[i].offlinetime != null){
+				if(result[i].offlinetime != null && result[i].offlinetime != '0000-00-00 00:00:00'){
 					obj.offlinetime = result[i].offlinetime.toISOString().replace(/T/, ' ').replace(/\..+/, '');
 				}else{
 					obj.offlinetime = result[i].offlinetime;
@@ -324,6 +433,7 @@ app.post('/nearByUsers', function(req,res){
 				data[i]= obj;
 			}
 			res.json({'code' : 1, 'users': data});
+		});
 		});
 	}
 });
@@ -471,7 +581,7 @@ function listLikes_(token,latitude,longitude,res){
 											var d = R * c;
 											obj1.distance = d;
 
-											if(rsl1[i1].offlinetime != null){
+											if(rsl1[i1].offlinetime != null && rsl1[i1].offlinetime != '0000-00-00 00:00:00'){
 												obj1.offlinetime = rsl1[i1].offlinetime.toISOString().replace(/T/, ' ').replace(/\..+/, '');
 											}else{
 												obj1.offlinetime = rsl1[i1].offlinetime;
@@ -518,7 +628,7 @@ function listLikes_(token,latitude,longitude,res){
 												var d = R * c;
 												obj2.distance = d;
 
-												if(rsl2[i2].offlinetime != null){
+												if(rsl2[i2].offlinetime != null && rsl2[i2].offlinetime != '0000-00-00 00:00:00'){
 													obj2.offlinetime = rsl2[i2].offlinetime.toISOString().replace(/T/, ' ').replace(/\..+/, '');
 												}else{
 													obj2.offlinetime = rsl2[i2].offlinetime;
@@ -565,7 +675,7 @@ function listLikes_(token,latitude,longitude,res){
 												var d = R * c;
 												obj3.distance = d;
 
-												if(rsl3[i3].offlinetime != null){
+												if(rsl3[i3].offlinetime != null && rsl3[i3].offlinetime != '0000-00-00 00:00:00'){
 													obj3.offlinetime = rsl3[i3].offlinetime.toISOString().replace(/T/, ' ').replace(/\..+/, '');
 												}else{
 													obj3.offlinetime = rsl3[i3].offlinetime;
@@ -613,7 +723,7 @@ function listLikes_(token,latitude,longitude,res){
 												var d = R * c;
 												obj6.distance = d;
 
-												if(rsl6[i6].offlinetime != null){
+												if(rsl6[i6].offlinetime != null && rsl6[i6].offlinetime != '0000-00-00 00:00:00'){
 													obj6.offlinetime = rsl6[i6].offlinetime.toISOString().replace(/T/, ' ').replace(/\..+/, '');
 												}else{
 													obj6.offlinetime = rsl6[i6].offlinetime;
@@ -3648,6 +3758,28 @@ app.post('/messagegroup',function(req,res){
 		});
 	}
 });
+
+app.post('/resetPassword',function(req,res){
+	var pwd = randomString(8, '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
+      var email = req.body.email;
+	db.query('update tbUser set password = ? where email = ? ',[md5(pwd), email],function(err,rsl){
+		db.query('select * from tbUser where email = ? ',email ,function(err1,rsl1){
+			if (typeof rsl1 !== 'undefined' && rsl1.length > 0){
+				console.log('user exist');
+				transporter.sendMail({
+					from: 'info@konnek.com',
+					to: email,
+					subject: 'Konnek Reset Password',
+					text: 'Your password is changed. \n Now the password is ' + pwd + '.'
+				});
+			}else{
+				console.log('user does not exist');
+			}
+		});
+		res.json({'message':'OK','code':1,'newpassword':pwd});
+	});
+});
+
 function formatDate(formatDate, formatString) {
 	if(formatDate instanceof Date) {
 		var months = new Array("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec");

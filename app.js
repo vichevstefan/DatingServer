@@ -20,7 +20,7 @@ app.use(cookieParser());
 app.use(require('stylus').middleware(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.set('port', 8081);
+app.set('port', process.env.PORT || 6969);
 var server = app.listen(app.get('port'));
 var io     = require('socket.io').listen(server);
 //var io = require('socket.io').listen(app.listen(8080));
@@ -34,10 +34,10 @@ app.get('/', function (req, res) {
 var mysql = require('mysql');
 
 var configdb = {
-    host: 'aa5bilh1o0uc00.c5cfpvazprxp.us-west-2.rds.amazonaws.com',
-    user: 'ebroot',
+    host: 'localhost',
+    user: 'root',
     password: 'Guomao12#',
-    database: 'ebdb',
+    database: 'marazeem',
     insecureAuth: true,
     multipleStatements: true,
 };
@@ -70,9 +70,13 @@ var listusers = [];
 io.sockets.on('connection', function(socket){
 
 	socket.on('joinchat',function(data){
+		console.log(data);
+		console.log(typeof(data));
+		console.log(typeof(data));
 		socket.userid = 'userid'+data.userid;
 		socket.username_join = data.username;
 		listusers['userid'+data.userid] = data.username;
+		console.log(listusers);
 		var listsocket = [];
 		if (typeof address['userid'+data.userid] == 'undefined') {
 			listsocket.push(socket.id);
@@ -87,8 +91,9 @@ io.sockets.on('connection', function(socket){
 			listsocket.push(socket.id);
 		}
 		address['userid'+data.userid] = listsocket;
+		console.log(listsocket);
+		console.log(address);
 	});
-	
 	socket.on('sendmessage', function (data) {
 		var fromid = data.sender;
 		var toid = data.receiver;
@@ -105,8 +110,8 @@ io.sockets.on('connection', function(socket){
 		}
 		var width = (typeof data.width != "undefined") ? data.width : 0;
 		var height = (typeof data.height != "undefined") ? data.height : 0;
-			
 		db.query('INSERT INTO tbMessage (`fromUser`,`toUser`,`message`,`width`,`height`,`status`,`type`,`uuid`,`time`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',[fromid, toid, message, width, height, status, type, uuid, time],function(err,rsl){
+			console.log(err);
 			db.query('select belong,path,thumb,thumb2 from tbImage where belong = ? and status = ?',[fromid,0],function(err2,rsl2){
 					if (err){
 						console.log(err);
@@ -123,7 +128,11 @@ io.sockets.on('connection', function(socket){
 													db.query('update tbUser set numPush = ? where device_token = ? ',[push,result2[0].device_token],function(er,rs){
 														var path = (result1[0].thumb2 == null) ? '/uploads/default_120.png' : result1[0].thumb2;
                                                         //if(status == 0) {
-                                                            pushNotifications(result1[0].fullname, path, result2[0].device_token, 2, fromid, message, rsl.insertId, path);
+															if(rsl1[0].deviceType == 'ios'){
+	                                                            pushNotifications(result1[0].fullname, path, result2[0].device_token, 2, fromid, message, rsl.insertId, path);
+															}else{
+																androidPush(result1[0].fullname, path, result2[0].device_token, 2, fromid, message, rsl.insertId, path);
+															}
                                                         //}
 														// db.end();
 													});
@@ -148,13 +157,14 @@ io.sockets.on('connection', function(socket){
 						}else {
 							obj.avatar = '/uploads/default_120.png';
 						}
-
-						if (typeof address['userid'+fromid] != 'undefined'){
-						var listsocketfrom = array_merge(address['userid'+fromid]);
-						for (x1 in listsocketfrom) {
-							io.sockets.socket(listsocketfrom[x1]).emit('message', obj);
-						}
-						}
+						console.log('tosocket : '+ address['userid'+toid]);
+						console.log('fromsocket : '+ address['userid'+fromid]);
+						/*if (typeof address['userid'+fromid] != 'undefined'){
+							var listsocketfrom = array_merge(address['userid'+fromid]);
+							for (x1 in listsocketfrom) {
+								io.sockets.socket(listsocketfrom[x1]).emit('message', obj);
+							}
+						}*/
 						if (typeof address['userid'+toid] != 'undefined'){
 							var listsocketto = array_merge(address['userid'+toid]);
 							for (x2 in listsocketto) {
@@ -445,7 +455,8 @@ function utf8_encode(argString) {
   return utftext;
 }
 
-
+function androidPush(username,path,device_token,type,userid,message,messageid){
+}
 function pushNotifications(username,path,device_token,type,userid,message,messageid){
 	var apn = require('apn');
 	var options = {
